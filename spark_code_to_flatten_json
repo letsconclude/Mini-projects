@@ -1,0 +1,43 @@
+# to read the json file
+df=spark.read.option('multiline',"true").json("file location")
+
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+#Flatten array of structs and structs
+def flatten(df):
+   # create dictionary of all field name and datatype   
+   complex_fields = dict([(field.name, field.dataType)
+                             for field in df.schema.fields
+                             if type(field.dataType) == ArrayType or  type(field.dataType) == StructType])
+   # print fields
+   while len(complex_fields)!=0:
+      col_name=list(complex_fields.keys())[0]
+      print ("Processing :"+col_name+" Type : "+str(type(complex_fields[col_name])))
+    
+      # Handle struct type.
+      if (type(complex_fields[col_name]) == StructType):
+         expanded = [col(col_name+'.'+k).alias(col_name+'_'+k) for k in [ n.name for n in  complex_fields[col_name]]]
+         df=df.select("*", *expanded).drop(col_name)
+    
+      # Handle array using the explode function
+      elif (type(complex_fields[col_name]) == ArrayType):    
+         df=df.withColumn(col_name,explode_outer(col_name))
+    
+      # compute remaining Fields in Schema       
+      complex_fields = dict([(field.name, field.dataType)
+                             for field in df.schema.fields
+                             if type(field.dataType) == ArrayType or  type(field.dataType) == StructType])
+   return df
+
+
+
+# call function with dataframe
+flattenedjson=flatten(df)
+
+#rename all fields of the dataframe
+newColumns = ["Designation","Employee_emp_id","parent_id","status_flag","Department_code","dept_flag","dept_id","dept_type"]
+b=flattenedjson.toDF(*newColumns)
+
+#display data
+b.display()
